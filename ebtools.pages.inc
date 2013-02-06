@@ -56,6 +56,58 @@ function _ebtools_query($agent, $query_args, $ckfile) {
   $result = json_decode($output, $assoc = TRUE);
   return $result;
 }
+/**
+ * Get all themes for a give person
+ */
+function _ebtools_person_themes_total($person, $type = 'novina') {
+  return _ebtools_theme_total('person', $person, $type);
+}
+
+/**
+ * Get total by theme for some other query
+ */
+function _ebtools_theme_total($type, $arg, $dbtype) {
+  if (($dbtype != 'novina') && ($dbtype != 'video')) {
+    return 0;
+  }
+  if (in_array($type, array('person', 'place', 'institution', 'party', 'nation'))) {
+    $agent = 'by' . $type;
+  } else {
+    return 0;
+  }
+  $data = array(
+    'dbtype' => $dbtype,
+    'theme'  => 1,
+  );
+  $data[$type] = $arg;
+
+  $min_year = variable_get('ebtools_start_year');
+  $max_year = variable_get('ebtools_end_year');
+  $themes = [];
+  $ckfile = _ebtools_login();
+  for ($i=$min_year; $i<=$max_year; $i++) {
+    $data['dbyear'] = $i;
+    $cid = "ebtools:themes:$arg:$i";
+    if (($cache = cache_get($cid)) && !empty($cache->data)) {
+      $year_themes = unserialize($cache->data);
+    } else {
+      $result = _ebtools_query($agent, $data, $ckfile);
+      $year_themes = $result['Teme'];
+      if ($i < $max_year) {
+        $cache_duration = 60*60*24*365; //cache it for entire year, it will probably never change
+      } else {
+        $cache_duration = 60*10; //lotus updates every 10-15 minutes
+      }
+      cache_set($cid, serialize($tmp), 'cache', REQUEST_TIME + $cache_duration;
+    }
+    foreach($year_themes as $theme) {
+      if !(in_array($theme, $themes)) {
+        $themes[] = $theme;
+      }
+    }
+  }
+  unlink($ckfile);
+  return $themes;
 
 /**
  * Get total number of search result
@@ -456,6 +508,20 @@ function _ebtools_list() {
     $type = 'media';
   } elseif ($args[0] == 'licnost') {
     $type = 'person';
+  //XXX NOT IMPLEMENTED YET
+  } elseif ($args[0] == 'dokument') {
+    $type = 'document';
+  } elseif ($args[0] == 'manifestacija') {
+    $type = 'manifestation';
+  } elseif ($args[0] == 'događaj') {
+    $type = 'event';
+  } elseif ($args[0] == 'stranka') {
+    $type = 'party';
+  } elseif ($args[0] == 'narod') {
+    $type = 'nation';
+  } elseif ($args[0] == 'tema') {
+    $type = 'theme';
+  //XXX NOT IMPLEMENTED YET
   } else {
     //$url = 'ebart/novinski/clanak/' . $godina . '/' . $id;
     drupal_goto($url, array(), 301);
@@ -480,6 +546,36 @@ function _ebtools_getlist($display='page', $args) {
   } elseif ($querytype == 'mesto') {
     $bylink = $base . 'pomestu/';
     $type = 'place';
+    //XXX NOT IMPLEMENTED YET
+  /*
+  } elseif ($querytype == 'dokument') {
+    $bylink = $base . 'podokumentu/';
+    $type = 'document';
+  } elseif ($querytype == 'manifestacija') {
+    $bylink = $base . 'pomanifestaciji/';
+    $type = 'manifestation';
+  } elseif ($querytype == 'događaj') {
+    $bylink = $base . 'podogađaju/';
+    $type = 'event';
+  } elseif ($querytype == 'stranka') {
+    $bylink = $base . 'postranci/';
+    $type = 'party';
+  } elseif ($querytype == 'narod') {
+    $bylink = $base . 'ponarodu/';
+    $type = 'nation';
+  } elseif ($querytype == 'tema') {
+    $bylink = $base . 'potemi/';
+    $type = 'theme';
+    //XXX NOT IMPLEMENTED YET
+   */
+  } elseif (in_array($querytype, array('dokument', 'manifestacija','događaj', 'stranka', 'narod', 'tema'))) {
+    $page_array['ebtools_inform'] = array(
+      '#title'  => t('Information'),
+      '#markup' => t('Views for type "!type" are not implemented yet', array(
+        '!type' => $querytype)
+      ),
+    );
+    return $page_array;
   } else {
     //none of the types we recognize
     $page_array['ebtools_error'] = array(
@@ -527,7 +623,7 @@ function _ebtools_getlist($display='page', $args) {
       );
       drupal_set_title(t('Error'));
     } else {
-      $min_year = 2013;//variable_get('ebtools_start_year');
+      $min_year = variable_get('ebtools_start_year');
       $max_year = variable_get('ebtools_end_year');
 
       if ($display == 'page') {
@@ -553,6 +649,16 @@ function _ebtools_getlist($display='page', $args) {
         $yearly[] = $tmp;
         $total += $tmp;
       }
+          //XXX DEBUG
+          //$entry = $entries[0];
+          /*
+          $page_array['ebtools_debug'] = array(
+            '#title'  => t('DEBUG'),
+            '#markup' => t('DEBUG Message: Total ' . $total),
+          );
+          return $page_array;
+          */
+          //XXX DEBUG END
       $page = pager_find_page();
 
       //calculate where do we need to pull data from
@@ -604,15 +710,7 @@ function _ebtools_getlist($display='page', $args) {
             $on_db++;
             $start_for_db = 0;
           }
-          //XXX DEBUG
-          //$entry = $entries[0];
-          $page_array['ebtools_debug'] = array(
-            '#title'  => t('DEBUG'),
-            '#markup' => t('DEBUG Message: Pre izvlačenja ')// . join(":", array_keys($entry))),
-          );
-          return $page_array;
-          //XXX DEBUG END
-          /*
+          /**/
           foreach ($entries as $entry) {
             $date = $entry['Dan'] . '.' . $entry['Mesec'] . '.' . $entry['Godina'];
             $datelink = 'ebart/news/bydate/' . $entry['Godina'] . '/' . $entry['Mesec'] . '/' . $entry['Dan'];
@@ -624,7 +722,7 @@ function _ebtools_getlist($display='page', $args) {
               'children' => array(l($entry['Novina'], $link), l($date, $datelink), $entry['ukratko']),
             );
           }
-          */
+          /**/
           pager_default_initialize($total, $num_per_page);
           $page_array[$pa_name] = array(
             '#title' => t('Showing articles @start-@end of @total for "%value"', array(
@@ -941,11 +1039,15 @@ function _ebtools_archive_article($godina, $unid) {
       */
       if (array_key_exists('Mesto', $article)) {
         if (is_array($article['Mesto'])) {
-          $value = implode(",", $article['Mesto']);
+          $tmp = array();
+          foreach($article['Mesto'] as $mesto) {
+            $tmp[] = l($mesto, 'ebart/novinski/mesto/' . $mesto);
+          }
+          $value = implode(",", $tmp);
         } else {
-          $value = $article['Mesto'];
+          $value = l($article['Mesto'], 'ebart/novinski/mesto/' . $article['Mesto']);
         }
-        $markup .= "<em>Mesto</em>:&nbsp;" . l($value, "ebart/news/byplace/" . $value) . "<br />\n";
+        $markup .= "<em>Mesto</em>:&nbsp;" . $value . "<br />\n";
       }
       $article_page['podaci'] = array(
         '#type'   => 'markup',
@@ -958,7 +1060,7 @@ function _ebtools_archive_article($godina, $unid) {
       //Datum is array (Day, Month, Year)
       $pubdate = implode('.', $article['Datum']);#][0] . '.' . $article['Datum'][1] . '.' . $article['Datum'][2] . '.';
       $publink = 'ebart/news/bydate/' . implode('/', array_reverse($article['Datum']));
-      $medialink = 'ebart/news/bymedia/' . $article['Datum'][2] . '/' . $article['Novina'];
+      $medialink = 'ebart/novinski/medij/' . $article['Novina'];
       $article_page['objavljeno'] = array(
         '#type'   => 'markup',
         '#markup' => "<p>" . l($pubdate, $publink) . ", " . l($article['Novina'], $medialink) . ", strana " . $article['Strana'] . "</p>\n",
@@ -994,11 +1096,11 @@ function _ebtools_archive_article($godina, $unid) {
       if ($antrfile != '') {
         $article_page['separator'] = array(
           '#type'   => 'markup',
-          '#markup' => "<h4>Antrfile</h4>\n<hr />\n",
+          '#markup' => "<h4 class=\"naslov-antrfile\">Antrfile</h4>\n<hr />\n",
         );
         $article_page['antrfile'] = array(
           '#type'   => 'markup',
-          '#markup' => "<div>" . $antrfile . "</div>\n",
+          '#markup' => "<div class=\"tekst-antrfile\">" . $antrfile . "</div>\n",
         );
       }
       cache_set($cid, serialize($article_page), 'cache_page', REQUEST_TIME + 900);

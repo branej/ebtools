@@ -52,7 +52,7 @@ function ebtools_dateselect_form(){
   * Form for filter on person page
  */
 function ebtools_personfilter_form() {
-  $options = array(
+  $opts_genres = array(
     t('Genres') => array(
       'all' => t('All'),
       'interview' => t('Interview'),
@@ -60,16 +60,44 @@ function ebtools_personfilter_form() {
       'ofperson' => t('About other person'),
     ),
   );
-  $form['genrefilter'] = array(
+  $opts_themes = array(
+    t('Themes') => array(
+      'Likovna umetnost' => 'Likovna umetnost',
+      'Muzeji' => 'Muzeji',
+      'Kultura' => 'Kultura',
+      'Crna Gora' => 'Crna Gora',
+      'Kinematografija' => 'Kinematografija',
+    ),
+  );
+
+  $form['personfilter'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Filters'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  /*$form['personfilter']['genrefilter'] = array(
     '#type' => 'fieldset',
     '#title' => t('Genre'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
-  );
-  $form['genrefilter']['genreselect'] = array(
+  );*/
+
+  $form['personfilter']/*['genrefilter']*/['genreselect'] = array(
     '#type' => 'select',
     '#title' => t('Genres'),
-    '#options' => $options,
+    '#options' => $opts_genres,
+  );
+  /*$form['personfilter']['themefilter'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Themes'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );*/
+  $form['personfilter']/*['themefilter']*/['themeselect'] = array(
+    '#type'    => 'select',
+    '#title'   => t('Themes'),
+    '#options' => $opts_themes,
   );
   /*
   $form['ftsearch'] = array(
@@ -82,7 +110,7 @@ function ebtools_personfilter_form() {
     '#type'  => 'textfield',
     '#title' => t('Search'),
   );*/
-  $form['genrefilter']['submit'] = array(
+  $form['personfilter']['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Refine'),
   );
