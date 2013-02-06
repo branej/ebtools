@@ -1,0 +1,8 @@
+name = Ebart Tools
+description = Alati za pristup Ebartovim domino serverima
+core = 7.x
+package = Ebart tools suite
+
+; NEW LINE
+configure = admin/config/content/ebtools
+

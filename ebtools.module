@@ -1,0 +1,388 @@
+<?php
+/**
+ * @file
+ * A block module that displays recent blog and forum posts.
+ */
+
+/**
+ * Implements hook_help;
+ * 
+ *  Displays help and module information.
+ * 
+ * @param path
+ *   Which path of the site we're using to display help
+ * @param arg
+ *   Array that holds the current path as returned from arg() function
+ */
+function ebtools_help($path, $arg) {
+  switch ($path) {
+    case "admin/help#ebtools":
+      return '<p>' . t("Various tools for accessing Ebart services") . '</p>';
+      break;
+  }
+}
+
+/**
+ * Display form for date selection
+ *
+ * @return form
+ */
+function ebtools_dateselect_form(){
+  $form['dateselection'] = array(
+    '#type'  => 'fieldset',
+    '#title' =>  t('Date range'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+  $form['dateselection']['startdate'] = array(
+    '#type' => 'date',
+    '#title' => t('Start date'),
+  );
+  $form['dateselection']['enddate'] = array(
+    '#type' => 'date',
+    '#title' => t('End date'),
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Search'),
+  );
+  return $form;
+}
+/**
+  * Form for filter on person page
+ */
+function ebtools_personfilter_form() {
+  $options = array(
+    t('Genres') => array(
+      'all' => t('All'),
+      'interview' => t('Interview'),
+      'bio' => t('Biographical data'),
+      'ofperson' => t('About other person'),
+    ),
+  );
+  $form['genrefilter'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Genre'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['genrefilter']['genreselect'] = array(
+    '#type' => 'select',
+    '#title' => t('Genres'),
+    '#options' => $options,
+  );
+  /*
+  $form['ftsearch'] = array(
+    '#type'  => 'fieldset',
+    '#title' => t('Full text search'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['ftsearch']['personftsearch'] = array(
+    '#type'  => 'textfield',
+    '#title' => t('Search'),
+  );*/
+  $form['genrefilter']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Refine'),
+  );
+  return $form;
+}
+
+function ebtools_placefilter_form() {
+  $form['placefilter'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Filter'),
+  );
+  return $form;  
+}
+
+function ebtools_tablefilter_form() {
+  $form['tablefilter'] = array(
+    '#type'  => 'textfield',
+    '#title' => t('Filter:'),
+    /*'#default_value' => t('Enter text to refine'),
+    '#size' => 60,
+    '#maxlength' => 128,*/
+  );
+  return $form;
+}
+/**
+ * submit function for dateselect form
+ */
+function ebtools_dateselect_form_submit($form, &$form_state) {
+  $values = $form_state['values'];
+  $sdate = implode('.', array($values['startdate']['day'], $values['startdate']['month'], $values['startdate']['year']));
+  $edate = implode('.', array($values['enddate']['day'], $values['enddate']['month'], $values['enddate']['year']));
+  //drupal_set_message(t('Start date: !start, end date: !end', array('!start' => $sdate, '!end' => $edate)));
+}
+
+/**
+ * Display form for search
+ */
+function ebtools_search_form(){
+  $form['ebsearch'] = array(
+    '#type' => 'textfield',
+    '#size' => 20,
+    '#maxlength' => 120,
+  );
+  $form['ebsearch_submit'] = array(
+    '#type'  => 'submit',
+    //'#value' => t('Search'),
+  );
+  return $form;
+}
+
+/**
+ * Return user access list as item_list 
+ */
+function ebtools_user_rights() {
+  $access_rights = array(
+    'access news archive'   => array(t('NEWS ARCHIVE'), 'ebart/novinski/medij/'),
+    'access video archive'  => array(t('VIDEO ARCHIVE'), 'ebart/video/NEPOSTOJI/'),
+    'access press clipping' => array(t('PRESS CLIPPING'), 'ebart/press/'),
+    'access video clipping' => array(t('VIDEO CLIPPING'), 'ebart/videoclipping/'),
+    'access web clipping'   => array(t('WEB CLIPPING'), 'ebart/webclipping/'),
+    'access media analysis' => array(t('MEDIA ANALYSIS'), 'ebart/analize/'),
+  );
+  $items = array();
+  foreach($access_rights as $right => $data) {
+    if (user_access($right)) {
+      $name = $data[0];
+      $link = $data[1];
+      $items[] = l($name, $link);
+    }
+  }
+  return $items;
+}
+
+/**
+ * submit function for search form
+ */
+function ebtools_search_form_submit($form, &$form_state) {
+  $query = $form_state['values']['ebsearch'];
+  $url = 'ebart/pretraga/novinski/' . check_plain($query);
+  $form_state['redirect'] = $url;
+}
+
+function ebtools_personfilter_form_submit($form, $form_state) {
+  $selected = $form_state['values']['genreselect'];
+  $rpath = request_path();
+  $particles = explode('/', $path);
+  $name = array_pop($particles);
+  $url  = 'ebart/novinski/licnostzanr/' . $selected . '/' . $name;
+  drupal_set_message('Odabrano: ' . check_plain($selected));
+  $form_state['redirect'] = $url;
+  /*$ftsearch = $form_state['values']['personftsearch'];
+  $genre  = &drupal_static('ebtools_personfilter_genre');
+  $genre  = $selected;
+  $search = &drupal_static('ebtools_personfilter_search');
+  $search = $ftsearch;
+  drupal_set_message('Odabrano: ' . check_plain($selected) . "\tFT: " . check_plain($ftsearch));*/
+}
+/**
+* Implements hook_block_info().
+*/
+function ebtools_block_info() {
+  $blocks['dateform'] = array(
+    'info'  => t('Ebtools - dates block'),
+    'cache' => DRUPAL_CACHE_PER_ROLE, //default
+  );
+  $blocks['personfilter'] = array(
+    'info'  => t('Ebtools - filter form for person page'),
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+  $blocks['ebsearch'] = array(
+    'info'  => t('Ebtools - search form'),
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+  $blocks['ebfilter'] = array(
+    'info' => t('Ebtools - filter block'),
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+  $blocks['listall'] = array(
+    'info'  => t('Ebtools - List ALL of type'),
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+  $blocks['listallby'] = array(
+    'info'  => t('Ebtools - List ALL for value (list for)'),
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+  $blocks['myebart'] = array(
+    'info'  => t('Ebtools - MyEbart block'),
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function ebtools_permission() {
+  return array(
+    'access ebtools search results page' => array(
+      'title' => t('Access search results page'),
+      'description' => t('Allow users to access page with search results'),
+    ),
+    'access news archive' => array(
+      'title' => t('News archive access'),
+      'description' => t('Allows users to access "News article" archive'),
+    ),
+    'access video archive' => array(
+      'title' => t('Video archive access'),
+      'description' => t('Allows users to access "Video clip" archive'),
+    ),
+    'access press clipping' => array(
+      'title' => t('Press clipping access'),
+      'description' => t('Allow users to access "Press clipping" service'),
+    ),
+    'access video clipping' => array(
+      'title' => t('Video clipping access'),
+      'description' => t('Allow users to access "Video clipping" service'),
+    ),
+    'access web clipping' => array(
+      'title' => t('Web clipping access'),
+      'description' => t('Allow users to access "Web clipping" service'),
+    ),
+    'access media analysis' => array(
+      'title' => t('Media analysis access'),
+      'description' => t('Allow users to access "Media analysis" service'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_view().
+ *
+ * Prepares the contents of the block.
+ */
+function ebtools_block_view($delta = '') {
+  if ($delta == 'dateform') {
+    $block['subject'] = t('Select dates');
+    $block['content'] = drupal_get_form('ebtools_dateselect_form');
+  } elseif ($delta == 'ebsearch') {
+    //$block['subject'] = t('Pretraga');
+    $block['content'] = drupal_get_form('ebtools_search_form');
+  } elseif ($delta == 'ebfilter') {
+    $block['content'] = drupal_get_form('ebtools_tablefilter_form');
+  } elseif ($delta == 'personfilter') {
+    $block['content'] = drupal_get_form('ebtools_personfilter_form');
+  } elseif ($delta == 'listall') {
+    //$block['subject'] = t('All media');
+    if (user_access('access content')) {
+      $items = _ebtools_block_list();
+      if (empty($items)) {
+        $block['content'] = t('No results found');
+      } else {
+        $block['content'] = array(
+          '#theme' => 'item_list',
+          '#items' => $items,
+          '#attributes' => array(
+            'class' => 'all-items-list'),
+        );
+      }
+    }
+  } elseif ($delta == 'listallby') {
+    if (user_access('access content')) {
+      $data = _ebtools_block_listby();
+      if (empty($data)) {
+        $block['content'] = t('No results found');
+      } else {
+        $block['content'] = $data;
+      }
+    }
+  } elseif ($delta == 'myebart') {
+    /**/
+    $block['subject'] = t('My Ebart');
+    //$block['content'] = t('Ovde ide mojebart');
+    //if (user_access('access_content')) {
+      $items = ebtools_user_rights();
+      if (empty($items)) {
+        $block['content'] = t('No rights given to this user');
+      } else {
+        $block['content'] = array(
+          '#theme' => 'item_list',
+          '#attributes' => array('class' => 'user-services'),
+          '#items' => $items);
+      }
+    //}
+    /**/
+  } /*else {
+    $block['content'] = t('Wrong block type !delta', array('!delta' => $delta));
+  }*/
+  return $block;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function ebtools_menu() {
+  $items = array();
+  $items['admin/config/content/ebtools'] = array(
+    'title' => t('Ebart tools'),
+    'description' => 'Configuration for Ebart tools module',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ebtools_form'),
+    'access arguments' => array('access administration pages'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'ebtools.admin.inc',
+  );
+  $items['ebart/pretraga/%/%'] = array(
+    'title' => t('Search results (Ebart)'),
+    'page callback' => 'ebtools_pretraga',
+    'page arguments' => array(2,3),
+    'access arguments' => array('access ebtools search results page'),
+    'type' => MENU_CALLBACK,
+    'file' => 'ebtools.pages.inc',
+  );
+  $items['ebart/news/bydate'] = array(
+    'title' => t('Listing by date'),
+    'page callback' => '_ebtools_archive_bydate',
+    #'page arguments' => array(4,5,6),
+    #/GODINA/MESEC/DAN
+    'access arguments' => array('access news archive'),
+    'type' => MENU_CALLBACK,
+    'file' => 'ebtools.pages.inc',
+  );
+  $items['ebart/novinski/clanak/%/%'] = array(
+    'title' => t('Article view'),
+    'page callback' => 'ebtools_novinski_clanak',
+    'page arguments' => array(3,4),
+    'access arguments' => array('access news archive'),
+    'type' => MENU_CALLBACK,
+    'file' => 'ebtools.pages.inc',
+  );
+  $items['ebart/novinski/clanaksirovo/%/%'] = array(
+    'title' => t('Raw article view'),
+    'page callback' => '_ebtools_archive_rawarticle',
+    'page arguments' => array(3,4),
+    'access arguments' => array('access ebtools archive article page'),
+    'type' => MENU_CALLBACK,
+    'file' => 'ebtools.pages.inc',
+  );
+  /*
+  $items['ebart/novinski/licnostzanr'] = array(
+    'title' => t('Person + genre'),
+    'page_callback' => '_ebtools_archive_persongenre',
+    'type' => MENU_CALLBACK,
+    'file' => 'ebtools.pages.inc',
+  );
+*/
+  $items['ebart/novinski'] = array(
+    'title' => t('Listing'),
+    'page callback' => '_ebtools_list',
+    'access arguments' => array('access news archive'),
+    'type' => MENU_CALLBACK,
+    'file' => 'ebtools.pages.inc',
+  );
+  $items['ebart/novinski/%/%/clanak/%/%'] = array(
+    'title' => t('Article'),
+    'page callback'  => '_ebtools_dump',
+    'page arguments' => array(2,3,5,6),
+    'access arguments' => array('access news archive'),
+    'type' => MENU_CALLBACK,
+    'file' => 'ebtools.pages.inc',
+  );
+  return $items;
+}
+
