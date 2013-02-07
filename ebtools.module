@@ -6,9 +6,9 @@
 
 /**
  * Implements hook_help;
- * 
+ *
  *  Displays help and module information.
- * 
+ *
  * @param path
  *   Which path of the site we're using to display help
  * @param arg
@@ -60,15 +60,16 @@ function ebtools_personfilter_form() {
       'ofperson' => t('About other person'),
     ),
   );
-  $opts_themes = array(
-    t('Themes') => array(
-      'Likovna umetnost' => 'Likovna umetnost',
-      'Muzeji' => 'Muzeji',
-      'Kultura' => 'Kultura',
-      'Crna Gora' => 'Crna Gora',
-      'Kinematografija' => 'Kinematografija',
-    ),
-  );
+  $rpath = request_path();
+  $particles = explode('/', $rpath);
+  $person = array_pop($particles);
+
+  $themes = _ebtools_person_themes_total($person, 'novina');
+  $ops = array();
+  foreach($themes as $theme) {
+    $ops[$theme] = $theme;
+  }
+  $opts_themes = array(t('Themes') => $ops);
 
   $form['personfilter'] = array(
     '#type' => 'fieldset',
@@ -76,25 +77,12 @@ function ebtools_personfilter_form() {
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
   );
-  /*$form['personfilter']['genrefilter'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Genre'),
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
-  );*/
-
-  $form['personfilter']/*['genrefilter']*/['genreselect'] = array(
+  $form['personfilter']['genreselect'] = array(
     '#type' => 'select',
     '#title' => t('Genres'),
     '#options' => $opts_genres,
   );
-  /*$form['personfilter']['themefilter'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Themes'),
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
-  );*/
-  $form['personfilter']/*['themefilter']*/['themeselect'] = array(
+  $form['personfilter']['themeselect'] = array(
     '#type'    => 'select',
     '#title'   => t('Themes'),
     '#options' => $opts_themes,
@@ -122,7 +110,7 @@ function ebtools_placefilter_form() {
     '#type' => 'textfield',
     '#title' => t('Filter'),
   );
-  return $form;  
+  return $form;
 }
 
 function ebtools_tablefilter_form() {
@@ -162,7 +150,7 @@ function ebtools_search_form(){
 }
 
 /**
- * Return user access list as item_list 
+ * Return user access list as item_list
  */
 function ebtools_user_rights() {
   $access_rights = array(
@@ -320,21 +308,16 @@ function ebtools_block_view($delta = '') {
       }
     }
   } elseif ($delta == 'myebart') {
-    /**/
     $block['subject'] = t('My Ebart');
-    //$block['content'] = t('Ovde ide mojebart');
-    //if (user_access('access_content')) {
-      $items = ebtools_user_rights();
-      if (empty($items)) {
-        $block['content'] = t('No rights given to this user');
-      } else {
-        $block['content'] = array(
-          '#theme' => 'item_list',
-          '#attributes' => array('class' => 'user-services'),
-          '#items' => $items);
-      }
-    //}
-    /**/
+    $items = ebtools_user_rights();
+    if (empty($items)) {
+      $block['content'] = t('No rights given to this user');
+    } else {
+      $block['content'] = array(
+        '#theme' => 'item_list',
+        '#attributes' => array('class' => 'user-services'),
+        '#items' => $items);
+    }
   } /*else {
     $block['content'] = t('Wrong block type !delta', array('!delta' => $delta));
   }*/

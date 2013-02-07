@@ -43,9 +43,10 @@ function _ebtools_login() {
 function _ebtools_query($agent, $query_args, $ckfile) {
   $SERVER = variable_get('ebtools_access_url');
   $URL    = $SERVER . '/' . $agent . '?OpenAgent&' . http_build_query($query_args);
-  //drupal_set_message(t('Query is !query', array('!query' => "$agent:" . implode('.', $query_args))));
-  //drupal_set_message(t('URL:: !url', array('!url' => $URL)));
-
+  /*
+  drupal_set_message(t('Query is !query', array('!query' => "$agent:" . implode('.', $query_args))));
+  drupal_set_message(t('URL:: !url', array('!url' => $URL)));
+  */
   $ch = curl_init($URL);
   curl_setopt($ch, CURLOPT_COOKIEFILE, $ckfile);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -56,8 +57,11 @@ function _ebtools_query($agent, $query_args, $ckfile) {
   $result = json_decode($output, $assoc = TRUE);
   return $result;
 }
+
 /**
- * Get all themes for a give person
+ * Get all themes for a given person
+ *
+ * redirect to general purpose _ebtools_theme_total
  */
 function _ebtools_person_themes_total($person, $type = 'novina') {
   return _ebtools_theme_total('person', $person, $type);
@@ -65,15 +69,19 @@ function _ebtools_person_themes_total($person, $type = 'novina') {
 
 /**
  * Get total by theme for some other query
+ *
+ * @return
+ * array of themes or empty array
  */
 function _ebtools_theme_total($type, $arg, $dbtype) {
+  //drupal_set_message('THEMES: ' . $type . ' : ' . $arg . ' : ' .$dbtype);
   if (($dbtype != 'novina') && ($dbtype != 'video')) {
-    return 0;
+    return array();
   }
   if (in_array($type, array('person', 'place', 'institution', 'party', 'nation'))) {
-    $agent = 'by' . $type;
+    $agent = 'listby' . $type;
   } else {
-    return 0;
+    return array();
   }
   $data = array(
     'dbtype' => $dbtype,
@@ -83,7 +91,7 @@ function _ebtools_theme_total($type, $arg, $dbtype) {
 
   $min_year = variable_get('ebtools_start_year');
   $max_year = variable_get('ebtools_end_year');
-  $themes = [];
+  $themes = array();
   $ckfile = _ebtools_login();
   for ($i=$min_year; $i<=$max_year; $i++) {
     $data['dbyear'] = $i;
@@ -91,29 +99,30 @@ function _ebtools_theme_total($type, $arg, $dbtype) {
     if (($cache = cache_get($cid)) && !empty($cache->data)) {
       $year_themes = unserialize($cache->data);
     } else {
-      $result = _ebtools_query($agent, $data, $ckfile);
-      $year_themes = $result['Teme'];
+      $results = _ebtools_query($agent, $data, $ckfile);
+      $year_themes = $results['Teme'];
       if ($i < $max_year) {
         $cache_duration = 60*60*24*365; //cache it for entire year, it will probably never change
       } else {
         $cache_duration = 60*10; //lotus updates every 10-15 minutes
       }
-      cache_set($cid, serialize($tmp), 'cache', REQUEST_TIME + $cache_duration;
+      cache_set($cid, serialize($year_themes), 'cache', REQUEST_TIME + $cache_duration);
     }
     foreach($year_themes as $theme) {
-      if !(in_array($theme, $themes)) {
+      if (!in_array($theme, $themes)) {
         $themes[] = $theme;
       }
     }
   }
   unlink($ckfile);
   return $themes;
+}
 
 /**
- * Get total number of search result
+ * Get total number of search results
  *
  * @return
- * number of result
+ * number of results
  */
 function _ebtools_pretraga_total($query, $type = 'novina') {
   if (($type != 'novina') && ($type != 'video')) {
@@ -142,6 +151,7 @@ function _ebtools_pretraga_yeartotal($query, $year, $type, $ckfile) {
   } else {
     return 0;
   }
+  $max_year = variable_get('ebtools_end_year');
   $cid = "ebtools:search:$type:yeartotal:$year";
   $data = array(
     "dbtype" => $dbtype,
@@ -155,8 +165,13 @@ function _ebtools_pretraga_yeartotal($query, $year, $type, $ckfile) {
     $data['dbyear'] = $year;
     $result = _ebtools_query('search', $data, $ckfile);
     $num_res = $result['toplevelentries'];
-    //XXX bilo bi bolje da cache istice svaki put sat +10-15 minuta, nakon replikacije
-    cache_set($cid, serialize($num_res), 'cache', REQUEST_TIME + 900);
+    if ($year < $max_year) {
+      $cache_duration = 60*60*24*365; //cache older data for entire year
+    } else {
+      //TODO would be better if cache expired every full hour+30 minutes, after replication
+      $cache_duration = 60*30; // 30 minutes should be safe for now
+    }
+    cache_set($cid, serialize($num_res), 'cache', REQUEST_TIME + $cache_duration);
   }
   return $num_res;
 }
@@ -165,24 +180,16 @@ function _ebtools_pretraga_yeartotal($query, $year, $type, $ckfile) {
  * Return search results
  */
 function ebtools_pretraga($type, $query) {
-  if (($type !== 'novinski') && ($type !== 'video')) {
-    $page_array['ebtools_search'] = array(
-        '#title' => t('Error'),
-        '#markup' => t('Wrong search type'),
-      );
-    return $page_array;
-  } else {
-    return _ebtools_pretraga($type, $query);
-  }
-}
-
-function _ebtools_pretraga($type, $query) {
   if ($type == 'novinski') {
     $dbtype = 'novina';
   } elseif ($type == 'video') {
     $dbtype = $type;
   } else {
-    return array();
+    $page_array['ebtools_search'] = array(
+      '#title' => t('Error'),
+      '#markup' => t('Wrong search type'),
+    );
+    return $page_array;
   }
   $pa_name = 'ebtools_search_' . $type;
   $base = 'ebart/' . $type . '/';
@@ -343,7 +350,6 @@ function _ebtools_archive_clip($godina, $unid) {
   return $page_array;
 }
 
-//XXX NOVO
 /**
  * Return total count of articles for given type and value
  */
@@ -649,16 +655,6 @@ function _ebtools_getlist($display='page', $args) {
         $yearly[] = $tmp;
         $total += $tmp;
       }
-          //XXX DEBUG
-          //$entry = $entries[0];
-          /*
-          $page_array['ebtools_debug'] = array(
-            '#title'  => t('DEBUG'),
-            '#markup' => t('DEBUG Message: Total ' . $total),
-          );
-          return $page_array;
-          */
-          //XXX DEBUG END
       $page = pager_find_page();
 
       //calculate where do we need to pull data from
@@ -710,7 +706,6 @@ function _ebtools_getlist($display='page', $args) {
             $on_db++;
             $start_for_db = 0;
           }
-          /**/
           foreach ($entries as $entry) {
             $date = $entry['Dan'] . '.' . $entry['Mesec'] . '.' . $entry['Godina'];
             $datelink = 'ebart/news/bydate/' . $entry['Godina'] . '/' . $entry['Mesec'] . '/' . $entry['Dan'];
@@ -722,7 +717,6 @@ function _ebtools_getlist($display='page', $args) {
               'children' => array(l($entry['Novina'], $link), l($date, $datelink), $entry['ukratko']),
             );
           }
-          /**/
           pager_default_initialize($total, $num_per_page);
           $page_array[$pa_name] = array(
             '#title' => t('Showing articles @start-@end of @total for "%value"', array(
@@ -768,7 +762,7 @@ function _ebtools_archive_bydate() {
     }
   } else {
     $valid_args = TRUE;
-    $args = array(variable_get('ebtools_end_year'));//array('2012'); // XXX promeniti
+    $args = array(variable_get('ebtools_end_year'));
   }
   if ($valid_args) {
     switch ($numargs) {
