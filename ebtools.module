@@ -48,6 +48,7 @@ function ebtools_dateselect_form(){
   );
   return $form;
 }
+
 /**
   * Form for filter on person page
  */
@@ -57,7 +58,7 @@ function ebtools_personfilter_form() {
       'all' => t('All'),
       'interview' => t('Interview'),
       'bio' => t('Biographical data'),
-      'ofperson' => t('About other person'),
+      'aboutperson' => t('About other person'),
     ),
   );
   $rpath = request_path();
@@ -65,8 +66,21 @@ function ebtools_personfilter_form() {
   $person = array_pop($particles);
 
   $themes = _ebtools_person_themes_total($person, 'novina');
-  $ops = array();
+  $ops = array('All' => t('All'),);
+  /*
+  $replacements = array(
+      ' ' => '-',
+      'š' => 's',
+      'č' => 'c',
+      'ć' => 'c',
+      'đ' => 'd',
+      'ž' => 'z',);
+  */
   foreach($themes as $theme) {
+    /*
+    $op = strtr(strtolower($theme), $replacements);
+    $ops[$op] = $theme;
+    */
     $ops[$theme] = $theme;
   }
   $opts_themes = array(t('Themes') => $ops);
@@ -87,6 +101,47 @@ function ebtools_personfilter_form() {
     '#title'   => t('Themes'),
     '#options' => $opts_themes,
   );
+  $form['personfilter']['dateselection'] = array(
+    '#type'  => 'fieldset',
+    '#title' =>  t('Date range'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+  if (module_exists('date_popup')) {
+    //use fancy date_popup if it installed
+    $default = strftime('%Y-%m-%d');
+    $format = 'd.m.Y';
+    $min_year = variable_get('ebtools_start_year');
+    $max_year = variable_get('ebtools_end_year');
+    $year_range = $min_year . ':' . $max_year;
+    $form['personfilter']['dateselection']['startdate'] = array(
+      '#type'  => 'date_popup',
+      '#title' => t('Start date'),
+      '#date_label_position' => 'within',
+      '#date_text_parts' => array('year', 'month', 'day'),
+      '#default_value' => $default,
+      '#date_format' => $format,
+      '#date_year_range' => $year_range,
+    );
+    $form['personfilter']['dateselection']['enddate'] = array(
+      '#type'  => 'date_popup',
+      '#title' => t('End date'),
+      '#date_label_position' => 'within',
+      '#date_text_parts' => array('year', 'month', 'day'),
+      '#default_value' => $default,
+      '#date_format' => $format,
+      '#date_year_range' => $year_range,
+    );
+  } else {
+    $form['personfilter']['dateselection']['startdate'] = array(
+      '#type' => 'date',
+      '#title' => t('Start date'),
+    );
+    $form['personfilter']['dateselection']['enddate'] = array(
+      '#type' => 'date',
+      '#title' => t('End date'),
+    );
+  }
   /*
   $form['ftsearch'] = array(
     '#type'  => 'fieldset',
@@ -105,14 +160,9 @@ function ebtools_personfilter_form() {
   return $form;
 }
 
-function ebtools_placefilter_form() {
-  $form['placefilter'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Filter'),
-  );
-  return $form;
-}
-
+/**
+ * Filter form for lists things
+ */
 function ebtools_tablefilter_form() {
   $form['tablefilter'] = array(
     '#type'  => 'textfield',
@@ -122,15 +172,6 @@ function ebtools_tablefilter_form() {
     '#maxlength' => 128,*/
   );
   return $form;
-}
-/**
- * submit function for dateselect form
- */
-function ebtools_dateselect_form_submit($form, &$form_state) {
-  $values = $form_state['values'];
-  $sdate = implode('.', array($values['startdate']['day'], $values['startdate']['month'], $values['startdate']['year']));
-  $edate = implode('.', array($values['enddate']['day'], $values['enddate']['month'], $values['enddate']['year']));
-  //drupal_set_message(t('Start date: !start, end date: !end', array('!start' => $sdate, '!end' => $edate)));
 }
 
 /**
@@ -173,6 +214,16 @@ function ebtools_user_rights() {
 }
 
 /**
+ * submit function for dateselect form
+ */
+function ebtools_dateselect_form_submit($form, &$form_state) {
+  $values = $form_state['values'];
+  $sdate = implode('.', array($values['startdate']['day'], $values['startdate']['month'], $values['startdate']['year']));
+  $edate = implode('.', array($values['enddate']['day'], $values['enddate']['month'], $values['enddate']['year']));
+  //drupal_set_message(t('Start date: !start, end date: !end', array('!start' => $sdate, '!end' => $edate)));
+}
+
+/**
  * submit function for search form
  */
 function ebtools_search_form_submit($form, &$form_state) {
@@ -182,20 +233,33 @@ function ebtools_search_form_submit($form, &$form_state) {
 }
 
 function ebtools_personfilter_form_submit($form, $form_state) {
-  $selected = $form_state['values']['genreselect'];
+  $values = $form_state['values'];
+  $genre  = $values['genreselect'];
+  $theme  = $values['themeselect'];
+  if (module_exists('date_popup')) {
+    $sdate = $values['startdate'];
+    $edate = $values['enddate'];
+  } else {
+    $sdate = implode('.', array($values['startdate']['day'], $values['startdate']['month'], $values['startdate']['year']));
+    $edate = implode('.', array($values['enddate']['day'], $values['enddate']['month'], $values['enddate']['year']));
+  }
+
+  drupal_set_message("Odabrano:\nGenre: " . $genre . "\tTheme: " . $theme . "\tFROM: " . $sdate . ' - TO: ' . $edate);
+  /*
   $rpath = request_path();
   $particles = explode('/', $path);
   $name = array_pop($particles);
   $url  = 'ebart/novinski/licnostzanr/' . $selected . '/' . $name;
   drupal_set_message('Odabrano: ' . check_plain($selected));
   $form_state['redirect'] = $url;
-  /*$ftsearch = $form_state['values']['personftsearch'];
+  $ftsearch = $form_state['values']['personftsearch'];
   $genre  = &drupal_static('ebtools_personfilter_genre');
   $genre  = $selected;
   $search = &drupal_static('ebtools_personfilter_search');
   $search = $ftsearch;
   drupal_set_message('Odabrano: ' . check_plain($selected) . "\tFT: " . check_plain($ftsearch));*/
 }
+
 /**
 * Implements hook_block_info().
 */
